@@ -50,16 +50,11 @@ app.add_middleware(
 
 
 # ============================================================
-# GLOBAL MODEL / EXPLAINER
+# LOAD MODEL
 # ============================================================
 
 model = None
 explainer = None
-
-
-# ============================================================
-# LOAD MODEL
-# ============================================================
 
 try:
 
@@ -84,10 +79,9 @@ try:
 
     explainer = shap.TreeExplainer(model)
 
-    print("✅ SHAP explainer created successfully.")
+    print("✅ SHAP explainer loaded successfully.")
 
     print("=" * 60)
-
 
 except Exception as e:
 
@@ -131,7 +125,7 @@ def create_input(data: StudentData) -> pd.DataFrame:
 
 
 # ============================================================
-# ROOT ENDPOINT
+# ROOT
 # ============================================================
 
 @app.get("/")
@@ -145,7 +139,7 @@ def home():
 
 
 # ============================================================
-# HEALTH ENDPOINT
+# HEALTH CHECK
 # ============================================================
 
 @app.get("/health")
@@ -161,7 +155,7 @@ def health():
 
 
 # ============================================================
-# PREDICTION ENDPOINT
+# PREDICTION
 # ============================================================
 
 @app.post("/predict")
@@ -182,6 +176,9 @@ def predict(data: StudentData):
 
         prediction = float(prediction)
 
+        # Keep productivity score between 0 and 100
+        prediction = max(0.0, min(100.0, prediction))
+
         return {
             "productivity_score": round(prediction, 2)
         }
@@ -195,7 +192,7 @@ def predict(data: StudentData):
 
 
 # ============================================================
-# SHAP EXPLANATION ENDPOINT
+# SHAP EXPLANATION
 # ============================================================
 
 @app.post("/explainer")
@@ -214,7 +211,6 @@ def explain(data: StudentData):
 
         shap_values = explainer.shap_values(input_data)
 
-        # SHAP returns an array for this regression model.
         values = shap_values[0]
 
         contributions = {

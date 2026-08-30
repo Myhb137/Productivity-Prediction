@@ -2,7 +2,7 @@ import shap
 import matplotlib.pyplot as plt 
 
 
-def explainer(model, X): 
+def create_explainer(model, X): 
     
     shap_explainer = shap.TreeExplainer(model)
     shap_values = shap_explainer.shap_values(X)

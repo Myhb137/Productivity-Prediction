@@ -6,7 +6,7 @@ from src.split_data import split_data
 from src.model_tuning import tune_xgboost 
 from src.evaluate import evaluate_model  
 from src.modl_pkl import save_model  
-from src.explainer import explainer
+from src.explainer import create_explainer
 
 
 def main():
@@ -55,9 +55,11 @@ def main():
         }
     )     
     
-    explainer = explainer(best_model, X_train) 
+    explainer = create_explainer(best_model, X_train) 
     
-    save_model(best_model, "../Productivity Prediction/model/best_model.pkl") 
+    save_model(best_model, "../Productivity Prediction/model/best_model.pkl")  
+    
+    save_model(explainer, "../Productivity Prediction/model/explainer.pkl")
     
     
     return data

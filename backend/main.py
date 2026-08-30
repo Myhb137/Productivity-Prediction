@@ -1,9 +1,9 @@
+
 from pathlib import Path
 
 import joblib
 import pandas as pd
 import shap
-import matplotlib.pyplot as plt
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,14 +24,15 @@ app.add_middleware(
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 MODEL_PATH = BASE_DIR / "model" / "best_model.pkl"
-PLOT_PATH = BASE_DIR / "model" / "shap_summary_plot.png"
 
 
 try:
     model = joblib.load(MODEL_PATH)
+    explainer = shap.TreeExplainer(model)
 except Exception as e:
     model = None
-    print(f"Model loading error: {e}")
+    explainer = None
+    print(f"Loading error: {e}")
 
 
 class StudentData(BaseModel):
@@ -63,7 +64,8 @@ def home():
 def health():
     return {
         "status": "ok",
-        "model_loaded": model is not None
+        "model_loaded": model is not None,
+        "explainer_loaded": explainer is not None
     }
 
 
@@ -78,6 +80,7 @@ def predict(data: StudentData):
 
     try:
         input_data = create_input(data)
+
         prediction = model.predict(input_data)[0]
 
         return {
@@ -94,40 +97,26 @@ def predict(data: StudentData):
 @app.post("/explainer")
 def explain(data: StudentData):
 
-    if model is None:
+    if explainer is None:
         raise HTTPException(
             status_code=500,
-            detail="Model could not be loaded"
+            detail="SHAP explainer could not be loaded"
         )
 
     try:
         input_data = create_input(data)
 
-        explainer = shap.TreeExplainer(model)
         shap_values = explainer.shap_values(input_data)
 
         values = shap_values[0]
 
         contributions = {
             feature: round(float(value), 4)
-            for feature, value in zip(input_data.columns, values)
+            for feature, value in zip(
+                input_data.columns,
+                values
+            )
         }
-
-        plt.figure(figsize=(8, 5))
-
-        shap.summary_plot(
-            shap_values,
-            input_data,
-            plot_type="bar",
-            show=False
-        )
-
-        plt.tight_layout()
-        plt.savefig(
-            PLOT_PATH,
-            bbox_inches="tight"
-        )
-        plt.close()
 
         return {
             "shap_values": contributions
@@ -138,4 +127,3 @@ def explain(data: StudentData):
             status_code=500,
             detail=str(e)
         )
-

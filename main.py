@@ -1,3 +1,5 @@
+import pandas as pd
+
 from src.data_loader import load_data
 from src.feature_selction import fe
 from src.overall_analysis import overall_analysis
@@ -14,6 +16,12 @@ def main():
     data = load_data()
 
     data = fe(data)
+
+    print("\nDataset statistics:")
+    print(data.describe())
+
+    print("\nCorrelation Matrix:")
+    print(data.corr())
 
     overall_analysis(data)
 
@@ -32,6 +40,17 @@ def main():
         y_train,
         params=best_params.get_params()
     )
+
+    test = pd.DataFrame([{
+        "study_hours_per_day": 8,
+        "focus_score": 95,
+        "sleep_hours": 8,
+        "phone_usage_hours": 1,
+        "stress_level": 2
+    }])
+
+    print("\nTest prediction:")
+    print(model.predict(test)[0])
 
     results = evaluate_model(
         model,

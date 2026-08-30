@@ -3,49 +3,35 @@ from pathlib import Path
 import joblib
 import pandas as pd
 import shap
+import matplotlib.pyplot as plt
 
 from fastapi import FastAPI, HTTPException
-from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 
 app = FastAPI(
-    title="Student Productivity Prediction API",
-    description="API for predicting student productivity scores",
-    version="1.0.0",
+    title="Student Productivity API",
+    version="1.0.0"
 )
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 MODEL_PATH = BASE_DIR / "model" / "best_model.pkl"
-EXPLAINER_PATH = BASE_DIR / "model" / "shap_explainer.pkl"
 PLOT_PATH = BASE_DIR / "model" / "shap_summary_plot.png"
 
 
 try:
     model = joblib.load(MODEL_PATH)
-except Exception:
+except Exception as e:
     model = None
-
-
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request, exc):
-    return JSONResponse(
-        status_code=422,
-        content={
-            "detail": "Invalid request data.",
-            "errors": exc.errors(),
-        },
-    )
+    print(f"Model loading error: {e}")
 
 
 class StudentData(BaseModel):
@@ -56,41 +42,42 @@ class StudentData(BaseModel):
     stress_level: float
 
 
+def create_input(data: StudentData):
+    return pd.DataFrame([{
+        "study_hours_per_day": data.study_hours_per_day,
+        "focus_score": data.focus_score,
+        "sleep_hours": data.sleep_hours,
+        "phone_usage_hours": data.phone_usage_hours,
+        "stress_level": data.stress_level
+    }])
+
+
 @app.get("/")
 def home():
     return {
-        "message": "Student Productivity Prediction API is running",
-        "status": "ok",
+        "message": "Student Productivity API is running"
     }
 
 
 @app.get("/health")
 def health():
     return {
-        "status": "healthy",
-        "model_loaded": model is not None,
+        "status": "ok",
+        "model_loaded": model is not None
     }
 
 
 @app.post("/predict")
 def predict(data: StudentData):
+
     if model is None:
         raise HTTPException(
             status_code=500,
-            detail=f"Model could not be loaded from {MODEL_PATH}",
+            detail="Model could not be loaded"
         )
 
     try:
-        input_data = pd.DataFrame([
-            {
-                "study_hours_per_day": data.study_hours_per_day,
-                "focus_score": data.focus_score,
-                "sleep_hours": data.sleep_hours,
-                "phone_usage_hours": data.phone_usage_hours,
-                "stress_level": data.stress_level,
-            }
-        ])
-
+        input_data = create_input(data)
         prediction = model.predict(input_data)[0]
 
         return {
@@ -100,53 +87,55 @@ def predict(data: StudentData):
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Prediction failed: {str(e)}",
+            detail=str(e)
         )
 
 
 @app.post("/explainer")
 def explain(data: StudentData):
-    if not EXPLAINER_PATH.exists():
+
+    if model is None:
         raise HTTPException(
             status_code=500,
-            detail=f"Explainer not found at {EXPLAINER_PATH}",
+            detail="Model could not be loaded"
         )
 
     try:
-        input_data = pd.DataFrame([
-            {
-                "study_hours_per_day": data.study_hours_per_day,
-                "focus_score": data.focus_score,
-                "sleep_hours": data.sleep_hours,
-                "phone_usage_hours": data.phone_usage_hours,
-                "stress_level": data.stress_level,
-            }
-        ])
+        input_data = create_input(data)
 
-        explainer = joblib.load(EXPLAINER_PATH)
+        explainer = shap.TreeExplainer(model)
         shap_values = explainer.shap_values(input_data)
 
-        import matplotlib.pyplot as plt
+        values = shap_values[0]
+
+        contributions = {
+            feature: round(float(value), 4)
+            for feature, value in zip(input_data.columns, values)
+        }
+
+        plt.figure(figsize=(8, 5))
 
         shap.summary_plot(
             shap_values,
             input_data,
             plot_type="bar",
-            show=False,
+            show=False
         )
 
         plt.tight_layout()
-        plt.savefig(PLOT_PATH, bbox_inches="tight")
+        plt.savefig(
+            PLOT_PATH,
+            bbox_inches="tight"
+        )
         plt.close()
 
         return {
-            "message": "Explanation generated successfully",
-            "plot_path": str(PLOT_PATH),
+            "shap_values": contributions
         }
 
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Explanation failed: {str(e)}",
+            detail=str(e)
         )
 

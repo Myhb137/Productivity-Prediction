@@ -10,11 +10,10 @@ from pydantic import BaseModel
 
 
 # ============================================================
-# CONFIGURATION
+# PATHS
 # ============================================================
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-
 MODEL_PATH = BASE_DIR / "model" / "productivity_model.pkl"
 
 FEATURES = [
@@ -27,19 +26,14 @@ FEATURES = [
 
 
 # ============================================================
-# FASTAPI APP
+# APP
 # ============================================================
 
 app = FastAPI(
     title="Student Productivity API",
-    description="Machine learning API for predicting student productivity.",
-    version="2.0.0",
+    version="3.0.0",
 )
 
-
-# ============================================================
-# CORS
-# ============================================================
 
 app.add_middleware(
     CORSMiddleware,
@@ -53,50 +47,36 @@ app.add_middleware(
 # LOAD MODEL
 # ============================================================
 
-model = None
-explainer = None
-
 try:
-
-    print("=" * 60)
-    print("STARTING STUDENT PRODUCTIVITY API")
-    print("=" * 60)
-
-    print("Model path:")
-    print(MODEL_PATH)
-
-    print("Model exists:")
-    print(MODEL_PATH.exists())
-
-    if not MODEL_PATH.exists():
-        raise FileNotFoundError(
-            f"Model file not found: {MODEL_PATH}"
-        )
-
     model = joblib.load(MODEL_PATH)
-
-    print("✅ Productivity model loaded successfully.")
-
     explainer = shap.TreeExplainer(model)
 
-    print("✅ SHAP explainer loaded successfully.")
-
     print("=" * 60)
+    print("PRODUCTIVITY API")
+    print("=" * 60)
+    print("MODEL PATH:", MODEL_PATH)
+    print("MODEL EXISTS:", MODEL_PATH.exists())
+    print("MODEL SIZE:", MODEL_PATH.stat().st_size)
+    print("MODEL TYPE:", type(model))
+
+    if hasattr(model, "feature_names_in_"):
+        print("MODEL FEATURES:", list(model.feature_names_in_))
+
+    print("MODEL LOADED: TRUE")
+    print("SHAP LOADED: TRUE")
 
 except Exception as e:
+    model = None
+    explainer = None
 
-    print("=" * 60)
-    print("❌ MODEL LOADING ERROR")
-    print(str(e))
-    print("=" * 60)
+    print("MODEL LOADING ERROR:", e)
 
 
 # ============================================================
-# REQUEST SCHEMA
+# REQUEST
 # ============================================================
 
 class StudentData(BaseModel):
-
     study_hours_per_day: float
     focus_score: float
     sleep_hours: float
@@ -105,27 +85,25 @@ class StudentData(BaseModel):
 
 
 # ============================================================
-# CREATE MODEL INPUT
+# INPUT
 # ============================================================
 
 def create_input(data: StudentData) -> pd.DataFrame:
 
     return pd.DataFrame(
-        [
-            {
-                "study_hours_per_day": data.study_hours_per_day,
-                "focus_score": data.focus_score,
-                "sleep_hours": data.sleep_hours,
-                "phone_usage_hours": data.phone_usage_hours,
-                "stress_level": data.stress_level,
-            }
-        ],
+        [{
+            "study_hours_per_day": data.study_hours_per_day,
+            "focus_score": data.focus_score,
+            "sleep_hours": data.sleep_hours,
+            "phone_usage_hours": data.phone_usage_hours,
+            "stress_level": data.stress_level,
+        }],
         columns=FEATURES,
     )
 
 
 # ============================================================
-# ROOT
+# HOME
 # ============================================================
 
 @app.get("/")
@@ -133,13 +111,12 @@ def home():
 
     return {
         "message": "Student Productivity API is running",
-        "version": "2.0.0",
-        "model": "XGBoost",
+        "version": "3.0.0",
     }
 
 
 # ============================================================
-# HEALTH CHECK
+# HEALTH
 # ============================================================
 
 @app.get("/health")
@@ -147,40 +124,78 @@ def health():
 
     return {
         "status": "ok",
-        "version": "2.0.0",
         "model_loaded": model is not None,
         "explainer_loaded": explainer is not None,
         "model_file": MODEL_PATH.name,
+        "model_exists": MODEL_PATH.exists(),
     }
 
 
 # ============================================================
-# PREDICTION
+# MODEL TEST
+# ============================================================
+
+@app.get("/debug-model")
+def debug_model():
+
+    if model is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Model is not loaded",
+        )
+
+    test = pd.DataFrame(
+        [{
+            "study_hours_per_day": 8,
+            "focus_score": 95,
+            "sleep_hours": 8,
+            "phone_usage_hours": 1,
+            "stress_level": 2,
+        }],
+        columns=FEATURES,
+    )
+
+    prediction = float(
+        model.predict(test)[0]
+    )
+
+    return {
+        "model_file": MODEL_PATH.name,
+        "model_size": MODEL_PATH.stat().st_size,
+        "prediction": prediction,
+        "features": FEATURES,
+    }
+
+
+# ============================================================
+# PREDICT
 # ============================================================
 
 @app.post("/predict")
 def predict(data: StudentData):
 
     if model is None:
-
         raise HTTPException(
             status_code=500,
-            detail="Productivity model is not loaded.",
+            detail="Model is not loaded",
         )
 
     try:
 
         input_data = create_input(data)
 
-        prediction = model.predict(input_data)[0]
+        prediction = float(
+            model.predict(input_data)[0]
+        )
 
-        prediction = float(prediction)
-
-        # Keep productivity score between 0 and 100
-        prediction = max(0.0, min(100.0, prediction))
+        print("INPUT:", input_data.to_dict(orient="records")[0])
+        print("RAW PREDICTION:", prediction)
 
         return {
-            "productivity_score": round(prediction, 2)
+            "productivity_score": round(
+                prediction,
+                2,
+            )
         }
 
     except Exception as e:
@@ -192,24 +207,25 @@ def predict(data: StudentData):
 
 
 # ============================================================
-# SHAP EXPLANATION
+# SHAP
 # ============================================================
 
 @app.post("/explainer")
 def explain(data: StudentData):
 
     if explainer is None:
-
         raise HTTPException(
             status_code=500,
-            detail="SHAP explainer is not loaded.",
+            detail="SHAP explainer is not loaded",
         )
 
     try:
 
         input_data = create_input(data)
 
-        shap_values = explainer.shap_values(input_data)
+        shap_values = explainer.shap_values(
+            input_data
+        )
 
         values = shap_values[0]
 
@@ -229,5 +245,5 @@ def explain(data: StudentData):
 
         raise HTTPException(
             status_code=500,
-            detail=f"SHAP explanation error: {str(e)}",
+            detail=f"SHAP error: {str(e)}",
         )

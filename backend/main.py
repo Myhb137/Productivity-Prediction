@@ -22,7 +22,7 @@ app.add_middleware(
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-MODEL_PATH = BASE_DIR / "model" / "productivity_model.pkl"
+MODEL_PATH = BASE_DIR /"model"/"productivity_model.pkl"
 
 
 try:

@@ -64,7 +64,8 @@ def health():
     return {
         "status": "ok",
         "model_loaded": model is not None,
-        "explainer_loaded": explainer is not None
+        "explainer_loaded": explainer is not None,
+        "model_path": str(MODEL_PATH)
     }
 
 

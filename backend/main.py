@@ -1,4 +1,3 @@
-
 from pathlib import Path
 
 import joblib
@@ -23,7 +22,7 @@ app.add_middleware(
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-MODEL_PATH = BASE_DIR / "model" / "best_model.pkl"
+MODEL_PATH = BASE_DIR / "model" / "productivity_model.pkl"
 
 
 try:
@@ -71,7 +70,6 @@ def health():
 
 @app.post("/predict")
 def predict(data: StudentData):
-
     if model is None:
         raise HTTPException(
             status_code=500,
@@ -80,7 +78,6 @@ def predict(data: StudentData):
 
     try:
         input_data = create_input(data)
-
         prediction = model.predict(input_data)[0]
 
         return {
@@ -96,7 +93,6 @@ def predict(data: StudentData):
 
 @app.post("/explainer")
 def explain(data: StudentData):
-
     if explainer is None:
         raise HTTPException(
             status_code=500,
@@ -105,9 +101,7 @@ def explain(data: StudentData):
 
     try:
         input_data = create_input(data)
-
         shap_values = explainer.shap_values(input_data)
-
         values = shap_values[0]
 
         contributions = {

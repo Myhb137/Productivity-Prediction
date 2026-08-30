@@ -30,30 +30,13 @@ def main():
 
     X_train, X_test, y_train, y_test = split_data(X, y)
 
-    best_params = tune_xgboost(
+    best_model = tune_xgboost(
         X_train,
         y_train
     )
 
-    model = train_model(
-        X_train,
-        y_train,
-        params=best_params.get_params()
-    )
-
-    test = pd.DataFrame([{
-        "study_hours_per_day": 8,
-        "focus_score": 95,
-        "sleep_hours": 8,
-        "phone_usage_hours": 1,
-        "stress_level": 2
-    }])
-
-    print("\nTest prediction:")
-    print(model.predict(test)[0])
-
     results = evaluate_model(
-        model,
+        best_model,
         X_test,
         y_test
     )
@@ -66,11 +49,16 @@ def main():
     print(f"R²   : {results[2]:.4f}")
     print("=" * 35)
 
-    best_model = train_model(
-        X_train,
-        y_train,
-        params=best_params.get_params()
-    )
+    test = pd.DataFrame([{
+        "study_hours_per_day": 8,
+        "focus_score": 95,
+        "sleep_hours": 8,
+        "phone_usage_hours": 1,
+        "stress_level": 2
+    }])
+
+    print("\nTest prediction:")
+    print(best_model.predict(test)[0])
 
     explainer = create_explainer(
         best_model,
@@ -79,17 +67,18 @@ def main():
 
     save_model(
         best_model,
-        "../Productivity Prediction/model/best_model.pkl"
+        "model/productivity_model.pkl"
     )
 
     save_model(
         explainer,
-        "../Productivity Prediction/model/explainer.pkl"
+        "model/explainer.pkl"
     )
+
+    print("\nModel saved successfully.")
 
     return data
 
 
 if __name__ == "__main__":
     main()
-

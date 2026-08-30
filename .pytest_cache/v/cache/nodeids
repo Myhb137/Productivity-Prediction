@@ -1,0 +1,4 @@
+[
+  "tests/test_api.py::test_predict_accepts_valid_json",
+  "tests/test_api.py::test_predict_returns_clear_error_for_malformed_json"
+]

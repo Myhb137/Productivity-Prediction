@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import joblib
 import pandas as pd
+import shap 
 
 
 app = FastAPI(
@@ -46,4 +47,29 @@ def predict(data: StudentData):
 
     return {
         "productivity_score": round(float(prediction), 2)
+    } 
+    
+@app.post("/explainer")
+def explain(data: StudentData):
+
+    input_data = pd.DataFrame([{
+        "study_hours_per_day": data.study_hours_per_day,
+        "focus_score": data.focus_score,
+        "sleep_hours": data.sleep_hours,
+        "phone_usage_hours": data.phone_usage_hours,
+        "stress_level": data.stress_level
+    }])
+
+    explainer = joblib.load("../model/shap_explainer.pkl")
+
+    shap_values = explainer.shap_values(input_data)
+
+    import matplotlib.pyplot as plt
+    shap.summary_plot(shap_values, input_data, plot_type="bar")
+    plt.tight_layout()
+    plt.savefig("shap_summary_plot.png")
+    plt.close()
+
+    return {
+        "message": "SHAP summary plot generated and saved as 'shap_summary_plot.png'"
     }

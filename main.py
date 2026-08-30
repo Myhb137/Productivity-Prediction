@@ -5,7 +5,8 @@ from src.model import train_model
 from src.split_data import split_data 
 from src.model_tuning import tune_xgboost 
 from src.evaluate import evaluate_model  
-from src.modl_pkl import save_model 
+from src.modl_pkl import save_model  
+from src.explainer import explainer
 
 
 def main():
@@ -53,6 +54,8 @@ def main():
             "random_state": 42
         }
     )     
+    
+    explainer = explainer(best_model, X_train) 
     
     save_model(best_model, "../Productivity Prediction/model/best_model.pkl") 
     

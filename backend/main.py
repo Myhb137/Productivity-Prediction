@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import pandas as pd
 import joblib
@@ -9,6 +10,17 @@ app = FastAPI(
     title="Productivity Prediction API",
     description="API for predicting productivity score and explaining predictions",
     version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:8080",
+        "http://localhost:5173"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
 )
 
 MODEL_PATH = os.path.join(
@@ -27,14 +39,12 @@ FEATURES = [
     "stress_level"
 ]
 
-
 class PredictionInput(BaseModel):
     study_hours_per_day: float
     focus_score: float
     sleep_hours: float
     phone_usage_hours: float
     stress_level: float
-
 
 def create_input(data: PredictionInput):
     X = pd.DataFrame([{
@@ -47,7 +57,6 @@ def create_input(data: PredictionInput):
 
     return X[FEATURES]
 
-
 @app.get("/")
 def home():
     return {
@@ -55,7 +64,6 @@ def home():
         "status": "success",
         "endpoints": ["/predict", "/explain", "/docs"]
     }
-
 
 @app.get("/health")
 def health():
@@ -65,17 +73,14 @@ def health():
         "shap_loaded": True
     }
 
-
 @app.post("/predict")
 def predict(data: PredictionInput):
     X = create_input(data)
-
     prediction = model.predict(X)[0]
 
     return {
         "productivity_score": round(float(prediction), 2)
     }
-
 
 @app.post("/explain")
 def explain(data: PredictionInput):
@@ -102,7 +107,6 @@ def explain(data: PredictionInput):
             for i in range(len(FEATURES))
         }
     }
-
 
 if __name__ == "__main__":
     import uvicorn

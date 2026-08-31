@@ -16,11 +16,12 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:8080",
-        "http://localhost:5173"
+        "http://localhost:5173",
+        "https://summit-score-ai.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
 
 MODEL_PATH = os.path.join(

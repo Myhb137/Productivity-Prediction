@@ -2,34 +2,22 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import pandas as pd
 import joblib
+import shap
 import os
 
 app = FastAPI(
     title="Productivity Prediction API",
-    description="API for predicting productivity score",
+    description="API for predicting productivity score and explaining predictions",
     version="1.0.0"
 )
 
 MODEL_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(__file__)),
-    "model",
+    os.path.dirname(__file__),
     "productivity_model.pkl"
 )
 
-print("=" * 60)
-print("PRODUCTIVITY API")
-print("=" * 60)
-
-print("MODEL PATH:", MODEL_PATH)
-print("MODEL EXISTS:", os.path.exists(MODEL_PATH))
-
-if not os.path.exists(MODEL_PATH):
-    raise FileNotFoundError(f"Model not found at: {MODEL_PATH}")
-
 model = joblib.load(MODEL_PATH)
-
-print("MODEL SIZE:", os.path.getsize(MODEL_PATH))
-print("MODEL TYPE:", type(model))
+explainer = shap.TreeExplainer(model)
 
 FEATURES = [
     "study_hours_per_day",
@@ -38,9 +26,6 @@ FEATURES = [
     "phone_usage_hours",
     "stress_level"
 ]
-
-print("MODEL FEATURES:", FEATURES)
-print("MODEL LOADED: TRUE")
 
 
 class PredictionInput(BaseModel):
@@ -51,13 +36,24 @@ class PredictionInput(BaseModel):
     stress_level: float
 
 
+def create_input(data: PredictionInput):
+    X = pd.DataFrame([{
+        "study_hours_per_day": data.study_hours_per_day,
+        "focus_score": data.focus_score,
+        "sleep_hours": data.sleep_hours,
+        "phone_usage_hours": data.phone_usage_hours,
+        "stress_level": data.stress_level
+    }])
+
+    return X[FEATURES]
+
+
 @app.get("/")
 def home():
     return {
         "message": "Productivity Prediction API is running",
         "status": "success",
-        "endpoint": "/predict",
-        "docs": "/docs"
+        "endpoints": ["/predict", "/explain", "/docs"]
     }
 
 
@@ -65,44 +61,46 @@ def home():
 def health():
     return {
         "status": "healthy",
-        "model_loaded": True
+        "model_loaded": True,
+        "shap_loaded": True
     }
 
 
 @app.post("/predict")
 def predict(data: PredictionInput):
-
-    input_data = {
-        "study_hours_per_day": data.study_hours_per_day,
-        "focus_score": data.focus_score,
-        "sleep_hours": data.sleep_hours,
-        "phone_usage_hours": data.phone_usage_hours,
-        "stress_level": data.stress_level
-    }
-
-    print("=" * 60)
-    print("NEW PREDICTION REQUEST")
-    print("INPUT DATA:", input_data)
-
-    X = pd.DataFrame([input_data])
-    X = X[FEATURES]
-
-    print("DATAFRAME:")
-    print(X)
-
-    print("FEATURE ORDER:")
-    print(list(X.columns))
-
-    print("VALUES:")
-    print(X.iloc[0].tolist())
+    X = create_input(data)
 
     prediction = model.predict(X)[0]
-    prediction = float(prediction)
-
-    print("MODEL PREDICTION:", prediction)
 
     return {
-        "productivity_score": round(prediction, 2)
+        "productivity_score": round(float(prediction), 2)
+    }
+
+
+@app.post("/explain")
+def explain(data: PredictionInput):
+    X = create_input(data)
+
+    shap_values = explainer.shap_values(X)
+
+    if hasattr(shap_values, "tolist"):
+        shap_values = shap_values.tolist()
+
+    base_value = explainer.expected_value
+
+    if hasattr(base_value, "tolist"):
+        base_value = base_value.tolist()
+
+    if isinstance(base_value, list):
+        base_value = base_value[0]
+
+    return {
+        "productivity_score": round(float(model.predict(X)[0]), 2),
+        "base_value": round(float(base_value), 2),
+        "features": {
+            FEATURES[i]: round(float(shap_values[0][i]), 4)
+            for i in range(len(FEATURES))
+        }
     }
 
 

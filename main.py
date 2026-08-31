@@ -30,13 +30,13 @@ def main():
 
     X_train, X_test, y_train, y_test = split_data(X, y)
 
-    best_model = tune_xgboost(
+    model = tune_xgboost(
         X_train,
         y_train
     )
 
     results = evaluate_model(
-        best_model,
+        model,
         X_test,
         y_test
     )
@@ -58,15 +58,15 @@ def main():
     }])
 
     print("\nTest prediction:")
-    print(best_model.predict(test)[0])
+    print(model.predict(test)[0])
 
     explainer = create_explainer(
-        best_model,
+        model,
         X_train
     )
 
     save_model(
-        best_model,
+        model,
         "model/productivity_model.pkl"
     )
 

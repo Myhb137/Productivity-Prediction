@@ -1,82 +1,49 @@
-from pathlib import Path
-
-import joblib
-import pandas as pd
-import shap
-
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI
 from pydantic import BaseModel
+import pandas as pd
+import joblib
+import os
 
+app = FastAPI(
+    title="Productivity Prediction API",
+    description="API for predicting productivity score",
+    version="1.0.0"
+)
 
-# ============================================================
-# PATHS
-# ============================================================
+MODEL_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(__file__)),
+    "model",
+    "productivity_model.pkl"
+)
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-MODEL_PATH = BASE_DIR / "model" / "productivity_model.pkl"
+print("=" * 60)
+print("PRODUCTIVITY API")
+print("=" * 60)
+
+print("MODEL PATH:", MODEL_PATH)
+print("MODEL EXISTS:", os.path.exists(MODEL_PATH))
+
+if not os.path.exists(MODEL_PATH):
+    raise FileNotFoundError(f"Model not found at: {MODEL_PATH}")
+
+model = joblib.load(MODEL_PATH)
+
+print("MODEL SIZE:", os.path.getsize(MODEL_PATH))
+print("MODEL TYPE:", type(model))
 
 FEATURES = [
     "study_hours_per_day",
     "focus_score",
     "sleep_hours",
     "phone_usage_hours",
-    "stress_level",
+    "stress_level"
 ]
 
-
-# ============================================================
-# APP
-# ============================================================
-
-app = FastAPI(
-    title="Student Productivity API",
-    version="3.0.0",
-)
+print("MODEL FEATURES:", FEATURES)
+print("MODEL LOADED: TRUE")
 
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-# ============================================================
-# LOAD MODEL
-# ============================================================
-
-try:
-    model = joblib.load(MODEL_PATH)
-    explainer = shap.TreeExplainer(model)
-
-    print("=" * 60)
-    print("PRODUCTIVITY API")
-    print("=" * 60)
-    print("MODEL PATH:", MODEL_PATH)
-    print("MODEL EXISTS:", MODEL_PATH.exists())
-    print("MODEL SIZE:", MODEL_PATH.stat().st_size)
-    print("MODEL TYPE:", type(model))
-
-    if hasattr(model, "feature_names_in_"):
-        print("MODEL FEATURES:", list(model.feature_names_in_))
-
-    print("MODEL LOADED: TRUE")
-    print("SHAP LOADED: TRUE")
-
-except Exception as e:
-    model = None
-    explainer = None
-
-    print("MODEL LOADING ERROR:", e)
-
-
-# ============================================================
-# REQUEST
-# ============================================================
-
-class StudentData(BaseModel):
+class PredictionInput(BaseModel):
     study_hours_per_day: float
     focus_score: float
     sleep_hours: float
@@ -84,166 +51,66 @@ class StudentData(BaseModel):
     stress_level: float
 
 
-# ============================================================
-# INPUT
-# ============================================================
-
-def create_input(data: StudentData) -> pd.DataFrame:
-
-    return pd.DataFrame(
-        [{
-            "study_hours_per_day": data.study_hours_per_day,
-            "focus_score": data.focus_score,
-            "sleep_hours": data.sleep_hours,
-            "phone_usage_hours": data.phone_usage_hours,
-            "stress_level": data.stress_level,
-        }],
-        columns=FEATURES,
-    )
-
-
-# ============================================================
-# HOME
-# ============================================================
-
 @app.get("/")
 def home():
-
     return {
-        "message": "Student Productivity API is running",
-        "version": "3.0.0",
+        "message": "Productivity Prediction API is running",
+        "status": "success",
+        "endpoint": "/predict",
+        "docs": "/docs"
     }
 
-
-# ============================================================
-# HEALTH
-# ============================================================
 
 @app.get("/health")
 def health():
-
     return {
-        "status": "ok",
-        "model_loaded": model is not None,
-        "explainer_loaded": explainer is not None,
-        "model_file": MODEL_PATH.name,
-        "model_exists": MODEL_PATH.exists(),
+        "status": "healthy",
+        "model_loaded": True
     }
 
-
-# ============================================================
-# MODEL TEST
-# ============================================================
-
-@app.get("/debug-model")
-def debug_model():
-
-    if model is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Model is not loaded",
-        )
-
-    test = pd.DataFrame(
-        [{
-            "study_hours_per_day": 8,
-            "focus_score": 95,
-            "sleep_hours": 8,
-            "phone_usage_hours": 1,
-            "stress_level": 2,
-        }],
-        columns=FEATURES,
-    )
-
-    prediction = float(
-        model.predict(test)[0]
-    )
-
-    return {
-        "model_file": MODEL_PATH.name,
-        "model_size": MODEL_PATH.stat().st_size,
-        "prediction": prediction,
-        "features": FEATURES,
-    }
-
-
-# ============================================================
-# PREDICT
-# ============================================================
 
 @app.post("/predict")
-def predict(data: StudentData):
+def predict(data: PredictionInput):
 
-    if model is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Model is not loaded",
-        )
+    input_data = {
+        "study_hours_per_day": data.study_hours_per_day,
+        "focus_score": data.focus_score,
+        "sleep_hours": data.sleep_hours,
+        "phone_usage_hours": data.phone_usage_hours,
+        "stress_level": data.stress_level
+    }
 
-    try:
+    print("=" * 60)
+    print("NEW PREDICTION REQUEST")
+    print("INPUT DATA:", input_data)
 
-        input_data = create_input(data)
+    X = pd.DataFrame([input_data])
+    X = X[FEATURES]
 
-        prediction = float(
-            model.predict(input_data)[0]
-        )
+    print("DATAFRAME:")
+    print(X)
 
-        print("INPUT:", input_data.to_dict(orient="records")[0])
-        print("RAW PREDICTION:", prediction)
+    print("FEATURE ORDER:")
+    print(list(X.columns))
 
-        return {
-            "productivity_score": round(
-                prediction,
-                2,
-            )
-        }
+    print("VALUES:")
+    print(X.iloc[0].tolist())
 
-    except Exception as e:
+    prediction = model.predict(X)[0]
+    prediction = float(prediction)
 
-        raise HTTPException(
-            status_code=500,
-            detail=f"Prediction error: {str(e)}",
-        )
+    print("MODEL PREDICTION:", prediction)
+
+    return {
+        "productivity_score": round(prediction, 2)
+    }
 
 
-# ============================================================
-# SHAP
-# ============================================================
+if __name__ == "__main__":
+    import uvicorn
 
-@app.post("/explainer")
-def explain(data: StudentData):
-
-    if explainer is None:
-        raise HTTPException(
-            status_code=500,
-            detail="SHAP explainer is not loaded",
-        )
-
-    try:
-
-        input_data = create_input(data)
-
-        shap_values = explainer.shap_values(
-            input_data
-        )
-
-        values = shap_values[0]
-
-        contributions = {
-            feature: round(float(value), 4)
-            for feature, value in zip(
-                FEATURES,
-                values,
-            )
-        }
-
-        return {
-            "shap_values": contributions
-        }
-
-    except Exception as e:
-
-        raise HTTPException(
-            status_code=500,
-            detail=f"SHAP error: {str(e)}",
-        )
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", 8000))
+    )
